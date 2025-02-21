@@ -3,11 +3,11 @@
     Installs or uninstalls software silently with detailed logging.
 
 .DESCRIPTION
-    This script performs a silent installation of an MSI and an EXE (with the EXE using the "-q" flag)
-    while capturing logs for each process in a centralized log folder ("C:\Windows\MITLL\Logs"). Log files
-    are named using the application name for easy identification. During uninstallation, it first runs any
-    uninstall.exe found in a Cytoscape directory (with logging), then uninstalls the MSI using its product code,
-    and always removes a desktop shortcut from the Public Desktop.
+    This script performs a silent installation of an MSI and an EXE (using the "-q" flag for the EXE)
+    while capturing logs for each process in "C:\Windows\Logs". Log files are named using the
+    application name for easy identification. During uninstallation, it first runs any uninstall.exe
+    found in a Cytoscape directory, then uninstalls the MSI using its product code. In both modes,
+    the script always removes the desktop shortcut from the Public Desktop.
 
 .PARAMETER install
     Use this switch to perform the installation.
@@ -48,6 +48,19 @@ $appName = "Cytoscape"  # <-- Update this value as needed
 # Set $PSScript to the directory where the script is located
 $PSScript = Split-Path -Parent $MyInvocation.MyCommand.Definition
 
+# Function to remove the desktop shortcut from the Public Desktop
+function Remove-DesktopShortcut {
+    $commonDesktop = [System.Environment]::GetFolderPath("CommonDesktopDirectory")
+    $shortcutPath = Join-Path $commonDesktop "$appName.lnk"  # <-- Update the shortcut name if needed
+    if (Test-Path $shortcutPath) {
+        Write-Host "Removing desktop shortcut at $shortcutPath..."
+        Remove-Item $shortcutPath -Force
+    }
+    else {
+        Write-Host "No desktop shortcut found at $shortcutPath."
+    }
+}
+
 if ($install) {
     # --------------------------
     # Silent Installation with Logging
@@ -74,12 +87,14 @@ if ($install) {
         Start-Process -FilePath $exePath `
                       -ArgumentList "-q" `
                       -RedirectStandardOutput $exeLogFile `
-                      -RedirectStandardError $exeLogFile `
                       -Wait -NoNewWindow
     }
     else {
         Write-Host "EXE installer not found at $exePath"
     }
+    
+    # Remove the desktop shortcut after the EXE installation
+    Remove-DesktopShortcut
 }
 
 if ($uninstall) {
@@ -98,7 +113,6 @@ if ($uninstall) {
                 Start-Process -FilePath $uninstallExe `
                               -ArgumentList "-q" `
                               -RedirectStandardOutput $uninstallLog `
-                              -RedirectStandardError $uninstallLog `
                               -Wait -NoNewWindow
             }
             else {
@@ -117,14 +131,6 @@ if ($uninstall) {
                   -ArgumentList "/x {B6031041-8C2C-4294-B525-DBC257A825F0} /qn /L*V `"$msiUninstallLogFile`"" `
                   -Wait -NoNewWindow
 
-    # Always remove the desktop shortcut from Public Desktop
-    $commonDesktop = [System.Environment]::GetFolderPath("CommonDesktopDirectory")
-    $shortcutPath = Join-Path $commonDesktop "$appName.lnk"  # <-- Update the shortcut name if needed
-    if (Test-Path $shortcutPath) {
-        Write-Host "Removing desktop shortcut at $shortcutPath..."
-        Remove-Item $shortcutPath -Force
-    }
-    else {
-        Write-Host "No desktop shortcut found at $shortcutPath."
-    }
+    # Always remove the desktop shortcut
+    Remove-DesktopShortcut
 }
