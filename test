@@ -42,7 +42,7 @@ if (-not ($install -or $uninstall)) {
 }
 
 # Set the log directory and ensure it exists.
-$logDirectory = "C:\Windows\MITLL\Logs"
+$logDirectory = "C:\Windows\Logs"
 if (-not (Test-Path $logDirectory)) {
     New-Item -Path $logDirectory -ItemType Directory -Force | Out-Null
 }
