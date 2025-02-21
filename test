@@ -1,0 +1,92 @@
+<#
+.SYNOPSIS
+    Installs or uninstalls software silently.
+
+.DESCRIPTION
+    This script installs an MSI and an EXE file silently when run with the -install switch.
+    It uninstalls the MSI using its product code and runs the uninstall.exe found in
+    a Cytoscape directory (matching "C:\Program Files\Cytoscape_v*") when run with the -uninstall switch.
+
+.PARAMETER install
+    Run this switch to perform the installation.
+
+.PARAMETER uninstall
+    Run this switch to perform the uninstallation.
+
+.NOTES
+    Update $PSScript with the directory containing your install files.
+    Replace "YourInstaller.msi" and "YourInstaller.exe" with the actual file names.
+#>
+
+param(
+    [switch]$install,
+    [switch]$uninstall
+)
+
+# Ensure that exactly one switch is provided
+if ($install -and $uninstall) {
+    Write-Error "Please specify only one action: -install or -uninstall."
+    exit 1
+}
+if (-not ($install -or $uninstall)) {
+    Write-Error "Please specify an action: -install or -uninstall."
+    exit 1
+}
+
+# Set the path to the directory containing your installation files.
+# Update this variable as needed.
+$PSScript = "C:\Path\To\InstallFiles"  # <-- Replace with your install file path
+
+if ($install) {
+    # --------------------------
+    # Silent Installation
+    # --------------------------
+    
+    # MSI silent installation
+    $msiPath = Join-Path $PSScript "YourInstaller.msi"  # <-- Replace with your MSI file name
+    if (Test-Path $msiPath) {
+        Write-Host "Installing MSI silently from $msiPath..."
+        Start-Process -FilePath "msiexec.exe" -ArgumentList "/i `"$msiPath`" /qn" -Wait -NoNewWindow
+    }
+    else {
+        Write-Host "MSI file not found at $msiPath"
+    }
+
+    # EXE silent installation (using -q switch)
+    $exePath = Join-Path $PSScript "YourInstaller.exe"  # <-- Replace with your EXE file name
+    if (Test-Path $exePath) {
+        Write-Host "Installing EXE silently from $exePath..."
+        Start-Process -FilePath $exePath -ArgumentList "-q" -Wait -NoNewWindow
+    }
+    else {
+        Write-Host "EXE installer not found at $exePath"
+    }
+}
+
+if ($uninstall) {
+    # --------------------------
+    # Silent Uninstallation
+    # --------------------------
+
+    # Uninstall MSI silently using its product code
+    Write-Host "Uninstalling MSI with product code {B6031041-8C2C-4294-B525-DBC257A825F0}..."
+    Start-Process -FilePath "msiexec.exe" -ArgumentList "/x {B6031041-8C2C-4294-B525-DBC257A825F0} /qn" -Wait -NoNewWindow
+
+    # Uninstall via uninstall.exe in the Cytoscape directory (using -q)
+    $cytoscapeDirs = Get-ChildItem -Path "C:\Program Files" -Directory | Where-Object { $_.Name -like "Cytoscape_v*" }
+    if ($cytoscapeDirs) {
+        foreach ($dir in $cytoscapeDirs) {
+            $uninstallExe = Join-Path $dir.FullName "uninstall.exe"
+            if (Test-Path $uninstallExe) {
+                Write-Host "Running uninstall.exe from $($dir.FullName)..."
+                Start-Process -FilePath $uninstallExe -ArgumentList "-q" -Wait -NoNewWindow
+            }
+            else {
+                Write-Host "uninstall.exe not found in $($dir.FullName)"
+            }
+        }
+    }
+    else {
+        Write-Host "No directory matching 'Cytoscape_v*' found in C:\Program Files"
+    }
+}
