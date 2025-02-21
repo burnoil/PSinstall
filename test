@@ -14,7 +14,7 @@
     Run this switch to perform the uninstallation.
 
 .NOTES
-    Update $PSScript with the directory containing your install files.
+    The installation files are assumed to be located in the same directory as this script.
     Replace "YourInstaller.msi" and "YourInstaller.exe" with the actual file names.
 #>
 
@@ -33,9 +33,8 @@ if (-not ($install -or $uninstall)) {
     exit 1
 }
 
-# Set the path to the directory containing your installation files.
-# Update this variable as needed.
-$PSScript = "C:\Path\To\InstallFiles"  # <-- Replace with your install file path
+# Set $PSScript to the directory where the script is located
+$PSScript = Split-Path -Parent $MyInvocation.MyCommand.Definition
 
 if ($install) {
     # --------------------------
