@@ -5,19 +5,15 @@
 .DESCRIPTION
     This script performs a silent installation of an MSI and an EXE (with the EXE using the "-q" flag)
     while capturing logs for each process in a centralized log folder ("C:\Windows\MITLL\Logs"). Log files
-    are named using the application name for easy identification. During uninstallation, it removes the MSI
-    using its product code (with logging), runs any uninstall.exe found in a Cytoscape directory, and optionally
-    removes a desktop shortcut from the Public Desktop if the -removeShortcut switch is provided.
+    are named using the application name for easy identification. During uninstallation, it first runs any
+    uninstall.exe found in a Cytoscape directory (with logging), then uninstalls the MSI using its product code,
+    and always removes a desktop shortcut from the Public Desktop.
 
 .PARAMETER install
     Use this switch to perform the installation.
 
 .PARAMETER uninstall
     Use this switch to perform the uninstallation.
-
-.PARAMETER removeShortcut
-    When used with -uninstall, this switch removes the desktop shortcut (assumed to be "Cytoscape.lnk")
-    from the Public Desktop.
 
 .NOTES
     - The installation files are assumed to be in the same folder as this script.
@@ -27,8 +23,7 @@
 
 param(
     [switch]$install,
-    [switch]$uninstall,
-    [switch]$removeShortcut
+    [switch]$uninstall
 )
 
 # Validate that exactly one action is specified
@@ -92,14 +87,7 @@ if ($uninstall) {
     # Silent Uninstallation with Logging
     # --------------------------
     
-    # Uninstall MSI silently using its product code with logging
-    $msiUninstallLogFile = Join-Path $logDirectory "$appName`_msi_uninstall.log"
-    Write-Host "Uninstalling MSI with product code {B6031041-8C2C-4294-B525-DBC257A825F0}. Log file: $msiUninstallLogFile"
-    Start-Process -FilePath "msiexec.exe" `
-                  -ArgumentList "/x {B6031041-8C2C-4294-B525-DBC257A825F0} /qn /L*V `"$msiUninstallLogFile`"" `
-                  -Wait -NoNewWindow
-
-    # Uninstall via uninstall.exe in the Cytoscape directory (using -q with logging)
+    # First, run uninstall.exe in any Cytoscape_v* directory (using -q with logging)
     $cytoscapeDirs = Get-ChildItem -Path "C:\Program Files" -Directory | Where-Object { $_.Name -like "Cytoscape_v*" }
     if ($cytoscapeDirs) {
         foreach ($dir in $cytoscapeDirs) {
@@ -122,16 +110,21 @@ if ($uninstall) {
         Write-Host "No directory matching 'Cytoscape_v*' found in C:\Program Files"
     }
     
-    # Optionally remove desktop shortcut from Public Desktop
-    if ($removeShortcut) {
-        $commonDesktop = [System.Environment]::GetFolderPath("CommonDesktopDirectory")
-        $shortcutPath = Join-Path $commonDesktop "$appName.lnk"  # <-- Update the shortcut name if needed
-        if (Test-Path $shortcutPath) {
-            Write-Host "Removing desktop shortcut at $shortcutPath..."
-            Remove-Item $shortcutPath -Force
-        }
-        else {
-            Write-Host "No desktop shortcut found at $shortcutPath."
-        }
+    # Then, uninstall MSI silently using its product code with logging
+    $msiUninstallLogFile = Join-Path $logDirectory "$appName`_msi_uninstall.log"
+    Write-Host "Uninstalling MSI with product code {B6031041-8C2C-4294-B525-DBC257A825F0}. Log file: $msiUninstallLogFile"
+    Start-Process -FilePath "msiexec.exe" `
+                  -ArgumentList "/x {B6031041-8C2C-4294-B525-DBC257A825F0} /qn /L*V `"$msiUninstallLogFile`"" `
+                  -Wait -NoNewWindow
+
+    # Always remove the desktop shortcut from Public Desktop
+    $commonDesktop = [System.Environment]::GetFolderPath("CommonDesktopDirectory")
+    $shortcutPath = Join-Path $commonDesktop "$appName.lnk"  # <-- Update the shortcut name if needed
+    if (Test-Path $shortcutPath) {
+        Write-Host "Removing desktop shortcut at $shortcutPath..."
+        Remove-Item $shortcutPath -Force
+    }
+    else {
+        Write-Host "No desktop shortcut found at $shortcutPath."
     }
 }
