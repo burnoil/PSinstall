@@ -1,29 +1,35 @@
 <#
 .SYNOPSIS
-    Installs or uninstalls software silently.
+    Installs or uninstalls software silently with detailed logging.
 
 .DESCRIPTION
-    This script installs an MSI and an EXE file silently when run with the -install switch.
-    It uninstalls the MSI using its product code and runs the uninstall.exe found in
-    a Cytoscape directory (matching "C:\Program Files\Cytoscape_v*") when run with the -uninstall switch.
+    This script performs silent installation of an MSI and an EXE (with the EXE using the "-q" flag)
+    while capturing logs for both. For the MSI, it uses msiexec’s logging parameter (/L*V). During uninstallation,
+    it uninstalls the MSI using its product code (with logging), runs any uninstall.exe found in a Cytoscape directory,
+    and optionally removes a desktop shortcut from the Public Desktop if the -removeShortcut switch is provided.
 
 .PARAMETER install
-    Run this switch to perform the installation.
+    Use this switch to perform the installation.
 
 .PARAMETER uninstall
-    Run this switch to perform the uninstallation.
+    Use this switch to perform the uninstallation.
+
+.PARAMETER removeShortcut
+    When used with -uninstall, this switch removes the desktop shortcut (assumed to be "Cytoscape.lnk")
+    from the Public Desktop.
 
 .NOTES
-    The installation files are assumed to be located in the same directory as this script.
-    Replace "YourInstaller.msi" and "YourInstaller.exe" with the actual file names.
+    The installation files are assumed to be in the same folder as this script.
+    Update "YourInstaller.msi", "YourInstaller.exe", and the desktop shortcut name as needed.
 #>
 
 param(
     [switch]$install,
-    [switch]$uninstall
+    [switch]$uninstall,
+    [switch]$removeShortcut
 )
 
-# Ensure that exactly one switch is provided
+# Validate that exactly one action is specified
 if ($install -and $uninstall) {
     Write-Error "Please specify only one action: -install or -uninstall."
     exit 1
@@ -38,24 +44,32 @@ $PSScript = Split-Path -Parent $MyInvocation.MyCommand.Definition
 
 if ($install) {
     # --------------------------
-    # Silent Installation
+    # Silent Installation with Logging
     # --------------------------
     
-    # MSI silent installation
+    # MSI silent installation with logging
     $msiPath = Join-Path $PSScript "YourInstaller.msi"  # <-- Replace with your MSI file name
     if (Test-Path $msiPath) {
+        $msiLogFile = Join-Path $PSScript "msi_install.log"
         Write-Host "Installing MSI silently from $msiPath..."
-        Start-Process -FilePath "msiexec.exe" -ArgumentList "/i `"$msiPath`" /qn" -Wait -NoNewWindow
+        Start-Process -FilePath "msiexec.exe" `
+                      -ArgumentList "/i `"$msiPath`" /qn /L*V `"$msiLogFile`"" `
+                      -Wait -NoNewWindow
     }
     else {
         Write-Host "MSI file not found at $msiPath"
     }
 
-    # EXE silent installation (using -q switch)
+    # EXE silent installation with logging (using -q switch)
     $exePath = Join-Path $PSScript "YourInstaller.exe"  # <-- Replace with your EXE file name
     if (Test-Path $exePath) {
+        $exeLogFile = Join-Path $PSScript "exe_install.log"
         Write-Host "Installing EXE silently from $exePath..."
-        Start-Process -FilePath $exePath -ArgumentList "-q" -Wait -NoNewWindow
+        Start-Process -FilePath $exePath `
+                      -ArgumentList "-q" `
+                      -RedirectStandardOutput $exeLogFile `
+                      -RedirectStandardError $exeLogFile `
+                      -Wait -NoNewWindow
     }
     else {
         Write-Host "EXE installer not found at $exePath"
@@ -64,21 +78,29 @@ if ($install) {
 
 if ($uninstall) {
     # --------------------------
-    # Silent Uninstallation
+    # Silent Uninstallation with Logging
     # --------------------------
-
-    # Uninstall MSI silently using its product code
+    
+    # Uninstall MSI silently using its product code with logging
+    $msiUninstallLogFile = Join-Path $PSScript "msi_uninstall.log"
     Write-Host "Uninstalling MSI with product code {B6031041-8C2C-4294-B525-DBC257A825F0}..."
-    Start-Process -FilePath "msiexec.exe" -ArgumentList "/x {B6031041-8C2C-4294-B525-DBC257A825F0} /qn" -Wait -NoNewWindow
+    Start-Process -FilePath "msiexec.exe" `
+                  -ArgumentList "/x {B6031041-8C2C-4294-B525-DBC257A825F0} /qn /L*V `"$msiUninstallLogFile`"" `
+                  -Wait -NoNewWindow
 
-    # Uninstall via uninstall.exe in the Cytoscape directory (using -q)
+    # Uninstall via uninstall.exe in the Cytoscape directory (using -q with logging)
     $cytoscapeDirs = Get-ChildItem -Path "C:\Program Files" -Directory | Where-Object { $_.Name -like "Cytoscape_v*" }
     if ($cytoscapeDirs) {
         foreach ($dir in $cytoscapeDirs) {
             $uninstallExe = Join-Path $dir.FullName "uninstall.exe"
             if (Test-Path $uninstallExe) {
+                $uninstallLog = Join-Path $PSScript ("uninstall_" + $dir.Name + ".log")
                 Write-Host "Running uninstall.exe from $($dir.FullName)..."
-                Start-Process -FilePath $uninstallExe -ArgumentList "-q" -Wait -NoNewWindow
+                Start-Process -FilePath $uninstallExe `
+                              -ArgumentList "-q" `
+                              -RedirectStandardOutput $uninstallLog `
+                              -RedirectStandardError $uninstallLog `
+                              -Wait -NoNewWindow
             }
             else {
                 Write-Host "uninstall.exe not found in $($dir.FullName)"
@@ -87,5 +109,18 @@ if ($uninstall) {
     }
     else {
         Write-Host "No directory matching 'Cytoscape_v*' found in C:\Program Files"
+    }
+    
+    # Optionally remove desktop shortcut from Public Desktop
+    if ($removeShortcut) {
+        $commonDesktop = [System.Environment]::GetFolderPath("CommonDesktopDirectory")
+        $shortcutPath = Join-Path $commonDesktop "Cytoscape.lnk"  # <-- Replace with your actual shortcut name if needed
+        if (Test-Path $shortcutPath) {
+            Write-Host "Removing desktop shortcut at $shortcutPath..."
+            Remove-Item $shortcutPath -Force
+        }
+        else {
+            Write-Host "No desktop shortcut found at $shortcutPath."
+        }
     }
 }
