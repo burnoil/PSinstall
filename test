@@ -3,10 +3,11 @@
     Installs or uninstalls software silently with detailed logging.
 
 .DESCRIPTION
-    This script performs silent installation of an MSI and an EXE (with the EXE using the "-q" flag)
-    while capturing logs for both. For the MSI, it uses msiexec’s logging parameter (/L*V). During uninstallation,
-    it uninstalls the MSI using its product code (with logging), runs any uninstall.exe found in a Cytoscape directory,
-    and optionally removes a desktop shortcut from the Public Desktop if the -removeShortcut switch is provided.
+    This script performs a silent installation of an MSI and an EXE (with the EXE using the "-q" flag)
+    while capturing logs for each process in a centralized log folder ("C:\Windows\MITLL\Logs"). Log files
+    are named using the application name for easy identification. During uninstallation, it removes the MSI
+    using its product code (with logging), runs any uninstall.exe found in a Cytoscape directory, and optionally
+    removes a desktop shortcut from the Public Desktop if the -removeShortcut switch is provided.
 
 .PARAMETER install
     Use this switch to perform the installation.
@@ -19,8 +20,9 @@
     from the Public Desktop.
 
 .NOTES
-    The installation files are assumed to be in the same folder as this script.
-    Update "YourInstaller.msi", "YourInstaller.exe", and the desktop shortcut name as needed.
+    - The installation files are assumed to be in the same folder as this script.
+    - Update "YourInstaller.msi" and "YourInstaller.exe" with the actual file names.
+    - Update $appName if needed.
 #>
 
 param(
@@ -39,6 +41,15 @@ if (-not ($install -or $uninstall)) {
     exit 1
 }
 
+# Set the log directory and ensure it exists.
+$logDirectory = "C:\Windows\MITLL\Logs"
+if (-not (Test-Path $logDirectory)) {
+    New-Item -Path $logDirectory -ItemType Directory -Force | Out-Null
+}
+
+# Define the application name used for naming log files.
+$appName = "Cytoscape"  # <-- Update this value as needed
+
 # Set $PSScript to the directory where the script is located
 $PSScript = Split-Path -Parent $MyInvocation.MyCommand.Definition
 
@@ -50,8 +61,8 @@ if ($install) {
     # MSI silent installation with logging
     $msiPath = Join-Path $PSScript "YourInstaller.msi"  # <-- Replace with your MSI file name
     if (Test-Path $msiPath) {
-        $msiLogFile = Join-Path $PSScript "msi_install.log"
-        Write-Host "Installing MSI silently from $msiPath..."
+        $msiLogFile = Join-Path $logDirectory "$appName`_msi_install.log"
+        Write-Host "Installing MSI silently from $msiPath. Log file: $msiLogFile"
         Start-Process -FilePath "msiexec.exe" `
                       -ArgumentList "/i `"$msiPath`" /qn /L*V `"$msiLogFile`"" `
                       -Wait -NoNewWindow
@@ -63,8 +74,8 @@ if ($install) {
     # EXE silent installation with logging (using -q switch)
     $exePath = Join-Path $PSScript "YourInstaller.exe"  # <-- Replace with your EXE file name
     if (Test-Path $exePath) {
-        $exeLogFile = Join-Path $PSScript "exe_install.log"
-        Write-Host "Installing EXE silently from $exePath..."
+        $exeLogFile = Join-Path $logDirectory "$appName`_exe_install.log"
+        Write-Host "Installing EXE silently from $exePath. Log file: $exeLogFile"
         Start-Process -FilePath $exePath `
                       -ArgumentList "-q" `
                       -RedirectStandardOutput $exeLogFile `
@@ -82,8 +93,8 @@ if ($uninstall) {
     # --------------------------
     
     # Uninstall MSI silently using its product code with logging
-    $msiUninstallLogFile = Join-Path $PSScript "msi_uninstall.log"
-    Write-Host "Uninstalling MSI with product code {B6031041-8C2C-4294-B525-DBC257A825F0}..."
+    $msiUninstallLogFile = Join-Path $logDirectory "$appName`_msi_uninstall.log"
+    Write-Host "Uninstalling MSI with product code {B6031041-8C2C-4294-B525-DBC257A825F0}. Log file: $msiUninstallLogFile"
     Start-Process -FilePath "msiexec.exe" `
                   -ArgumentList "/x {B6031041-8C2C-4294-B525-DBC257A825F0} /qn /L*V `"$msiUninstallLogFile`"" `
                   -Wait -NoNewWindow
@@ -94,8 +105,8 @@ if ($uninstall) {
         foreach ($dir in $cytoscapeDirs) {
             $uninstallExe = Join-Path $dir.FullName "uninstall.exe"
             if (Test-Path $uninstallExe) {
-                $uninstallLog = Join-Path $PSScript ("uninstall_" + $dir.Name + ".log")
-                Write-Host "Running uninstall.exe from $($dir.FullName)..."
+                $uninstallLog = Join-Path $logDirectory ("$appName" + "_" + $dir.Name + "_uninstall.log")
+                Write-Host "Running uninstall.exe from $($dir.FullName). Log file: $uninstallLog"
                 Start-Process -FilePath $uninstallExe `
                               -ArgumentList "-q" `
                               -RedirectStandardOutput $uninstallLog `
@@ -114,7 +125,7 @@ if ($uninstall) {
     # Optionally remove desktop shortcut from Public Desktop
     if ($removeShortcut) {
         $commonDesktop = [System.Environment]::GetFolderPath("CommonDesktopDirectory")
-        $shortcutPath = Join-Path $commonDesktop "Cytoscape.lnk"  # <-- Replace with your actual shortcut name if needed
+        $shortcutPath = Join-Path $commonDesktop "$appName.lnk"  # <-- Update the shortcut name if needed
         if (Test-Path $shortcutPath) {
             Write-Host "Removing desktop shortcut at $shortcutPath..."
             Remove-Item $shortcutPath -Force
